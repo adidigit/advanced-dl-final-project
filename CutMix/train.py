@@ -164,7 +164,8 @@ def main():
     else:
         raise Exception('unknown network architecture: {}'.format(args.net_type))
 
-    #model = torch.nn.DataParallel(model).cuda()
+    if torch.cuda.is_available():
+        model = torch.nn.DataParallel(model).cuda()
 
     print(model)
     print('the number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
@@ -222,9 +223,9 @@ def train(train_loader, model, criterion, optimizer, epoch):
     for i, (input, target) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
-
-        input = input#.cuda()
-        target = target#.cuda()
+        if torch.cuda.is_available():
+            input = input.cuda()
+            target = target.cuda()
 
         r = np.random.rand(1)
         if args.beta > 0 and r < args.cutmix_prob:
@@ -310,6 +311,7 @@ def validate(val_loader, model, criterion, epoch):
     for i, (input, target) in enumerate(val_loader):
         if torch.cuda.is_available():
             target = target.cuda()
+            input = input.cuda()
 
         output = model(input)
         loss = criterion(output, target)
