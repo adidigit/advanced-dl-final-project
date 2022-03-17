@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# env
+environment.yml
+
+# results
+mixup-cifar10/results/
+
+# vscode folder
+.idea/
