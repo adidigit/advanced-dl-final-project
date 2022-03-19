@@ -63,6 +63,9 @@ parser.add_argument('--beta', default=0, type=float,
                     help='hyperparameter beta')
 parser.add_argument('--cutmix_prob', default=0, type=float,
                     help='cutmix probability')
+parser.add_argument('--my_test', default=0, type=float,
+                    help='my test')
+
 
 parser.set_defaults(bottleneck=True)
 parser.set_defaults(verbose=True)
@@ -231,7 +234,10 @@ def train(train_loader, model, criterion, optimizer, epoch):
         if args.beta > 0 and r < args.cutmix_prob:
             # generate mixed sample
             lam = np.random.beta(args.beta, args.beta)
-            rand_index = torch.randperm(input.size()[0])#.cuda()
+            if(torch.cuda.is_available()):
+                rand_index = torch.randperm(input.size()[0]).cuda()
+            else:
+                rand_index = torch.randperm(input.size()[0])
             target_a = target
             target_b = target[rand_index]
             bbx1, bby1, bbx2, bby2 = rand_bbox(input.size(), lam)
@@ -241,6 +247,32 @@ def train(train_loader, model, criterion, optimizer, epoch):
             # compute output
             output = model(input)
             loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
+
+        if args.my_test == 1 and args.beta > 0:
+            lam = np.random.beta(args.beta, args.beta)
+            rand_col_row = np.random.choice(2)  # choose cols or rows
+            if (torch.cuda.is_available()):
+                rand_index = torch.randperm(input.size()[0]).cuda()
+            else:
+                rand_index = torch.randperm(input.size()[0])
+            target_a = target
+            target_b = target[rand_index]
+
+            if rand_col_row == 0:
+                ratio = int(lam * input.shape[-2])
+                rand_pixels = np.random.choice(list(range(input.shape[-2])), ratio)
+                input[:, :, rand_pixels, :] = (input[rand_index, :, :, :])[:, :, rand_pixels, :]
+                lam = 1 - len(rand_pixels) * input.shape[-1] / (input.size()[-1] * input.size()[-2])
+
+            else:
+                ratio = int(lam * input.shape[-1])
+                rand_pixels = np.random.choice(list(range(input.shape[-1])), ratio)
+                input[:, :, :, rand_pixels] = (input[rand_index, :, :, :])[:, :, :, rand_pixels]
+                lam = 1 - len(rand_pixels) * input.shape[-2] / (input.size()[-1] * input.size()[-2])
+
+            output = model(input)
+            loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
+
         else:
             # compute output
             output = model(input)
