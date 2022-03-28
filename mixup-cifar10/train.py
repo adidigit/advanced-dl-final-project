@@ -24,7 +24,7 @@ from torch.utils.data import random_split
 
 import matplotlib.pyplot as plt
 from utils_c import load_txt
-from torch.utils.data import Subset, ConcatDataset, ChainDataset
+from torch.utils.data import Subset, ConcatDataset
 
 import time
 
@@ -127,7 +127,9 @@ def main():
         corruptions = load_txt('./corruptions.txt')
 
         for i, cname in enumerate(corruptions):
-            tmp_dataset = CIFAR10C(root=os.path.join(my_data_root, 'CIFAR-10-C'),name=cname,
+            #tmp_dataset = CIFAR10C(root=os.path.join(my_data_root, 'CIFAR-10-C'),name=cname,
+            #                            transform=transform_train)
+            tmp_dataset = CIFAR10C(root=os.path.join('../data', 'CIFAR-10-C'),name=cname,
                                         transform=transform_train)
             start= 20000
             stop = 30000
@@ -158,7 +160,9 @@ def main():
         corruptions = load_txt('./corruptions.txt')
 
         for i, cname in enumerate(corruptions):
-            tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-100-C'),name=cname,
+            #tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-100-C'),name=cname,
+            #                            transform=transform_train)
+            tmp_dataset = CIFAR100C(root=os.path.join('../data', 'CIFAR-100-C'),name=cname,
                                         transform=transform_train)
             start= 20000
             stop = 30000
