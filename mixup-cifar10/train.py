@@ -9,6 +9,7 @@ from __future__ import print_function
 import argparse
 import csv
 import os
+#from selectors import EpollSelector
 
 import numpy as np
 import torch
@@ -19,11 +20,19 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 #from torch.utils.tensorboard import SummaryWriter
 import torchvision.datasets as datasets
+from torch.utils.data import random_split
+
+import matplotlib.pyplot as plt
+from utils_c import load_txt
+from torch.utils.data import Subset, ConcatDataset, ChainDataset
 
 import time
 
 import models
 from utils import progress_bar
+from dataset import CIFAR10C, CIFAR100C
+
+#%matplotlib inline
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -44,13 +53,20 @@ def main():
     parser.add_argument('--decay', default=1e-4, type=float, help='weight decay')
     parser.add_argument('--alpha', default=1., type=float,
                         help='mixup interpolation coefficient (default: 1)')
+    #parser.add_argument('--dataset', default="CIFAR10C", type=str, help='data set')
     parser.add_argument('--dataset', default="CIFAR10", type=str, help='data set')
+    parser.add_argument('--testset', default="None", type=str, help='test set')
     args = parser.parse_args()
+
+
+    my_data_root = 'C:/Users/naama-alon/data'
 
     use_cuda = torch.cuda.is_available()
 
     best_acc = 0  # best test accuracy
     start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+
+    tot_val_time = 0
 
     if args.seed != 0:
         torch.manual_seed(args.seed)
@@ -86,11 +102,11 @@ def main():
         trainloader = torch.utils.data.DataLoader(trainset,
                                                 batch_size=args.batch_size,
                                                 shuffle=True, num_workers=8)
-
-        testset = datasets.CIFAR10(root='~/data', train=False, download=False,
-                                transform=transform_test)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=100,
-                                                shuffle=False, num_workers=8)
+        if args.testset =="None":
+            testset = datasets.CIFAR10(root='~/data', train=False, download=False,
+                                    transform=transform_test)
+            testloader = torch.utils.data.DataLoader(testset, batch_size=100,
+                                                    shuffle=False, num_workers=8)
     elif args.dataset=="CIFAR100":
         print('Chose CIFAR100 Dataset..')
         num_classes=100
@@ -99,11 +115,67 @@ def main():
         trainloader = torch.utils.data.DataLoader(trainset,
                                                 batch_size=args.batch_size,
                                                 shuffle=True, num_workers=8)
+        if args.testset =="None":
+            testset = datasets.CIFAR100(root='~/data', train=False, download=False,
+                                    transform=transform_test)
+            testloader = torch.utils.data.DataLoader(testset, batch_size=100,
+                                                    shuffle=False, num_workers=8)
 
-        testset = datasets.CIFAR100(root='~/data', train=False, download=False,
-                                transform=transform_test)
+    if args.testset=="CIFAR10C":
+        print('Chose CIFAR10 Corrupted Testset..')
+        num_classes=10
+        corruptions = load_txt('./corruptions.txt')
+
+        for i, cname in enumerate(corruptions):
+            tmp_dataset = CIFAR10C(root=os.path.join(my_data_root, 'CIFAR-10-C'),name=cname,
+                                        transform=transform_train)
+            start= 20000
+            stop = 30000
+            indices = [i for i in range(start, stop)] # use sevirity 3
+            sev3 = Subset(tmp_dataset, indices)
+            split_lengths = [int(len(sev3)*0.833), int(len(sev3)*0.167)]
+            #sev3_trainset, sev3_testset = random_split(sev3, split_lengths)
+            _ , sev3_testset = random_split(sev3, split_lengths) 
+            if i==0:
+                #trainset_arr =  [sev3_trainset]
+                testset_arr = [sev3_testset]
+            else:
+                #trainset_arr.append(sev3_trainset)
+                testset_arr.append(sev3_testset)
+
+        #trainset =  ConcatDataset(trainset_arr)
+        testset =  ConcatDataset(testset_arr)
+
+        #trainloader = torch.utils.data.DataLoader(trainset,
+                                                #batch_size=args.batch_size,
+                                                #shuffle=True, num_workers=8)
         testloader = torch.utils.data.DataLoader(testset, batch_size=100,
                                                 shuffle=False, num_workers=8)
+
+    elif args.testset=="CIFAR100C":
+        print('Chose CIFAR100 Corrupted Testset..')
+        num_classes=100
+        corruptions = load_txt('./corruptions.txt')
+
+        for i, cname in enumerate(corruptions):
+            tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-100-C'),name=cname,
+                                        transform=transform_train)
+            start= 20000
+            stop = 30000
+            indices = [i for i in range(start, stop)] # use sevirity 3
+            sev3 = Subset(tmp_dataset, indices)
+            split_lengths = [int(len(sev3)*0.833), int(len(sev3)*0.167)]
+            _ , sev3_testset = random_split(sev3, split_lengths) 
+            if i==0:
+                testset_arr = [sev3_testset]
+            else:
+                testset_arr.append(sev3_testset)
+
+        testset =  ConcatDataset(testset_arr)
+
+        testloader = torch.utils.data.DataLoader(testset, batch_size=100,
+                                                shuffle=False, num_workers=8)
+
 
 
     # Model
@@ -240,8 +312,8 @@ def main():
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.t7' + args.name + '_'
-                + str(args.seed))
+        torch.save(state, './checkpoint/ckpt.t7_' + args.model + '_'
+                + args.dataset  + '_' + args.testset)
 
 
     def adjust_learning_rate(optimizer, epoch):
@@ -263,17 +335,22 @@ def main():
 
     for epoch in range(start_epoch, args.epoch):
         train_loss, reg_loss, train_acc = train(epoch)
+        tic = time.perf_counter()
         test_loss, test_acc, best_acc = test(epoch, best_acc)
+        toc = time.perf_counter()
+        tot_val_time += (toc - tic)
         adjust_learning_rate(optimizer, epoch)
         with open(logname, 'a') as logfile:
             logwriter = csv.writer(logfile, delimiter=',')
             logwriter.writerow([epoch, train_loss, reg_loss, train_acc, test_loss,
                                 test_acc, (100-test_acc)])
+
+    return tot_val_time
     
-    toc = time.perf_counter()
 
 if __name__ == '__main__':
     tic = time.perf_counter()
-    main()
+    tot_val_time = main()
     toc = time.perf_counter()
+    print(f"Validation run for: {(((tot_val_time)/60)):0.4f} minutes.")
     print(f"Run for: {(((toc - tic)/60)/60):0.4f} hours.")

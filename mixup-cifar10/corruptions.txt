@@ -1,0 +1,6 @@
+gaussian_noise
+defocus_blur
+brightness
+contrast
+elastic_transform
+snow
