@@ -131,8 +131,9 @@ dmypy.json
 # env
 environment.yml
 
-# results
+# results & checkpoints
 mixup-cifar10/results/
+mixup-cifar10/checkpoint/
 
 # vscode folder
 .idea/
