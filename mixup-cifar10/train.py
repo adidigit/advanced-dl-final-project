@@ -60,6 +60,7 @@ def main():
 
 
     my_data_root = 'C:/Users/naama-alon/data'
+    #my_data_root ='../data'
 
     use_cuda = torch.cuda.is_available()
 
@@ -127,9 +128,7 @@ def main():
         corruptions = load_txt('./corruptions.txt')
 
         for i, cname in enumerate(corruptions):
-            #tmp_dataset = CIFAR10C(root=os.path.join(my_data_root, 'CIFAR-10-C'),name=cname,
-            #                            transform=transform_train)
-            tmp_dataset = CIFAR10C(root=os.path.join('../data', 'CIFAR-10-C'),name=cname,
+            tmp_dataset = CIFAR10C(root=os.path.join(my_data_root, 'CIFAR-10-C'),name=cname,
                                         transform=transform_train)
             start= 20000
             stop = 30000
@@ -160,9 +159,7 @@ def main():
         corruptions = load_txt('./corruptions.txt')
 
         for i, cname in enumerate(corruptions):
-            #tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-100-C'),name=cname,
-            #                            transform=transform_train)
-            tmp_dataset = CIFAR100C(root=os.path.join('../data', 'CIFAR-100-C'),name=cname,
+            tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-100-C'),name=cname,
                                         transform=transform_train)
             start= 20000
             stop = 30000
@@ -302,10 +299,17 @@ def main():
             checkpoint(acc, epoch)
         if acc > best_acc:
             best_acc = acc
+
+        if acc > best_acc:
+            checkpoint(acc, epoch)
+            best_acc = acc
+        if epoch == start_epoch + args.epoch - 1: #last epoch
+            checkpoint(acc, epoch, last=True)
+
         return (test_loss/batch_idx, 100.*correct/total, best_acc)
 
 
-    def checkpoint(acc, epoch):
+    def checkpoint(acc, epoch, last=False):
         # Save checkpoint.
         print('Saving..')
         state = {
@@ -316,8 +320,12 @@ def main():
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.t7_' + args.model + '_'
-                + args.dataset  + '_' + args.testset)
+        if last:
+            torch.save(state, './checkpoint/ckpt.t7_' + args.model + '_'
+                + args.dataset  + '_' + args.testset + '_last')
+        else:
+            torch.save(state, './checkpoint/ckpt.t7_' + args.model + '_'
+                    + args.dataset  + '_' + args.testset + '_best')
 
 
     def adjust_learning_rate(optimizer, epoch):
