@@ -20,13 +20,18 @@ import pyramidnet as PYRM
 
 import warnings
 
+from dataset import CIFAR10C, CIFAR100C
+from torch.utils.data import random_split
+from utils_c import load_txt
+from torch.utils.data import Subset, ConcatDataset
+
 warnings.filterwarnings("ignore")
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
                      and callable(models.__dict__[name]))
 
-parser = argparse.ArgumentParser(description='Cutmix PyTorch CIFAR-10, CIFAR-100 and ImageNet-1k Test')
+parser = argparse.ArgumentParser(description='Cutmix PyTorch CIFAR-10, CIFAR-100, CIFAR-10-C, CIFAR-100-C and ImageNet-1k Test')
 parser.add_argument('--net_type', default='pyramidnet', type=str,
                     help='networktype: resnet, and pyamidnet')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -42,7 +47,7 @@ parser.add_argument('--depth', default=32, type=int,
 parser.add_argument('--no-bottleneck', dest='bottleneck', action='store_false',
                     help='to use basicblock for CIFAR datasets (default: bottleneck)')
 parser.add_argument('--dataset', dest='dataset', default='imagenet', type=str,
-                    help='dataset (options: cifar10, cifar100, and imagenet)')
+                    help='dataset (options: cifar10, cifar100, cifar10c, cifar100c and imagenet)')
 parser.add_argument('--alpha', default=300, type=float,
                     help='number of new channel increases per depth (default: 300)')
 parser.add_argument('--no-verbose', dest='verbose', action='store_false',
@@ -57,6 +62,9 @@ best_err5 = 100
 
 
 def main():
+    #my_data_root = '../data'
+    my_data_root = 'C:/Users/naama-alon/data'
+
     global args, best_err1, best_err5
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -86,9 +94,58 @@ def main():
                 datasets.CIFAR10('../data', train=False, transform=transform_test),
                 batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
             numberofclass = 10
+        elif args.dataset == 'cifar100c':
+            corruptions = load_txt('./corruptions.txt')
+
+            for i, cname in enumerate(corruptions):
+                tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-100-C'),name=cname,
+                                            transform=transform_test)
+
+                start= 20000
+                stop = 30000
+                indices = [i for i in range(start, stop)] # use sevirity 3
+                sev3 = Subset(tmp_dataset, indices)
+                split_lengths = [int(len(sev3)*0.833), int(len(sev3)*0.167)]
+                _ , sev3_testset = random_split(sev3, split_lengths) 
+                if i==0:
+                    testset_arr = [sev3_testset]
+                else:
+                    testset_arr.append(sev3_testset)
+
+            valset =  ConcatDataset(testset_arr)
+
+            val_loader = torch.utils.data.DataLoader(
+                valset,
+                batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
+            numberofclass = 100
+
+
+        elif args.dataset == 'cifar10c':
+            corruptions = load_txt('./corruptions.txt')
+
+            for i, cname in enumerate(corruptions):
+                tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-10-C'),name=cname,
+                                            transform=transform_test)
+
+                start= 20000
+                stop = 30000
+                indices = [i for i in range(start, stop)] # use sevirity 3
+                sev3 = Subset(tmp_dataset, indices)
+                split_lengths = [int(len(sev3)*0.833), int(len(sev3)*0.167)]
+                _ , sev3_testset = random_split(sev3, split_lengths) 
+                if i==0:
+                    testset_arr = [sev3_testset]
+                else:
+                    testset_arr.append(sev3_testset)
+
+            valset =  ConcatDataset(testset_arr)
+            val_loader = torch.utils.data.DataLoader(
+                valset,
+                batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
+            numberofclass = 10
         else:
             raise Exception('unknown dataset: {}'.format(args.dataset))
-
+        
     elif args.dataset == 'imagenet':
 
         valdir = os.path.join('/home/data/ILSVRC/val')
