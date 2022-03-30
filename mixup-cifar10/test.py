@@ -24,7 +24,7 @@ from torch.utils.data import random_split
 
 import matplotlib.pyplot as plt
 from utils_c import load_txt
-from torch.utils.data import Subset, ConcatDataset, ChainDataset
+from torch.utils.data import Subset, ConcatDataset
 
 import time
 
@@ -44,26 +44,26 @@ def main():
     # from paper: DenseNet190,RsNet18,
     # we want to check: ResNet101
     parser.add_argument('--name', default='0', type=str, help='name of run')
-    parser.add_argument('--seed', default=0, type=int, help='random seed')
+    parser.add_argument('--dir', default='cifar10_cifar10C_resnet18', type=str, help='directory of checkpoint file')
+    parser.add_argument('--checkpoint', default='ckpt.t7_ResNet18_CIFAR10_CIFAR10C_last', type=str, help='name checkpoint file')
+    parser.add_argument('--seed', default=20170922, type=int, help='random seed')
     #parser.add_argument('--batch-size', default=128, type=int, help='batch size')
-    parser.add_argument('--epoch', default=200, type=int,
-                        help='total epochs to run')
+    #parser.add_argument('--epoch', default=200, type=int,
+    #                    help='total epochs to run')
     parser.add_argument('--no-augment', dest='augment', action='store_false',
                         help='use standard augmentation (default: True)')
     #parser.add_argument('--decay', default=1e-4, type=float, help='weight decay')
     #parser.add_argument('--alpha', default=1., type=float,
     #                    help='mixup interpolation coefficient (default: 1)')
-    parser.add_argument('--dataset', default="CIFAR10", type=str, help='data set')
+    #parser.add_argument('--dataset', default="CIFAR10", type=str, help='data set')
     parser.add_argument('--testset', default="CIFAR10C", type=str, help='data set')
+    #parser.add_argument('--testset', default="CIFAR10", type=str, help='data set')
     args = parser.parse_args()
 
 
     my_data_root = 'C:/Users/naama-alon/data'
 
     use_cuda = torch.cuda.is_available()
-
-    best_acc = 0  # best test accuracy
-    start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
     if args.seed != 0:
         torch.manual_seed(args.seed)
@@ -129,24 +129,46 @@ def main():
         testloader = torch.utils.data.DataLoader(testset, batch_size=100,
                                                 shuffle=False, num_workers=8)
 
+    elif args.testset=="CIFAR100C":
+        print('Chose CIFAR100 Corrupted Trainset..')
+        corruptions = load_txt('./corruptions.txt')
+
+        for i, cname in enumerate(corruptions):
+            tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-100-C'),name=cname,
+                                        transform=transform_train)
+            start= 20000
+            stop = 30000
+            indices = [i for i in range(start, stop)] # use sevirity 3
+            sev3 = Subset(tmp_dataset, indices)
+            split_lengths = [int(len(sev3)*0.833), int(len(sev3)*0.167)]
+            _, sev3_testset = random_split(sev3, split_lengths)
+            if i==0:
+                testset_arr = [sev3_testset]
+            else:
+                testset_arr.append(sev3_testset)
+
+        testset =  ConcatDataset(testset_arr)
+
+        testloader = torch.utils.data.DataLoader(testset, batch_size=100,
+                                                shuffle=False, num_workers=8)
+
 
 
     # Model
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.t7' + args.name + '_'
-                            + str(args.seed))
+    checkpoint = torch.load('./checkpoint/' + args.dir + '/'+ args.checkpoint)
     net = checkpoint['net']
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch'] + 1
+    #best_acc = checkpoint['acc']
+    #start_epoch = checkpoint['epoch'] + 1
     rng_state = checkpoint['rng_state']
     torch.set_rng_state(rng_state)
      
     if not os.path.isdir('test_results'):
         os.mkdir('test_results')
-    logname = ('test_results/log_' + net.__class__.__name__ + '_' + args.name + '_'
-            + str(args.seed) + '.csv')
+    logname = ('test_results/log_' + net.__class__.__name__ + '_' + args.testset
+            + '.csv')
 
     if use_cuda:
         net.cuda()
@@ -158,7 +180,7 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
 
-    def test(epoch, best_acc):
+    def test():  
         #global best_acc
         net.eval()
         test_loss = 0
@@ -183,44 +205,24 @@ def main():
                         % (test_loss/(batch_idx+1), 100.*correct/total,
                             correct, total))
         acc = 100.*correct/total
-        if epoch == start_epoch + args.epoch - 1 or acc > best_acc:
-            checkpoint(acc, epoch)
-        if acc > best_acc:
-            best_acc = acc
-        return (test_loss/batch_idx, 100.*correct/total, best_acc)
 
-
-    def checkpoint(acc, epoch):
-        # Save checkpoint.
-        print('Saving..')
-        state = {
-            'net': net,
-            'acc': acc,
-            'epoch': epoch,
-            'rng_state': torch.get_rng_state()
-        }
-        if not os.path.isdir('test_checkpoint'):
-            os.mkdir('test_checkpoint')
-        torch.save(state, './test_checkpoint/ckpt.t7_' + args.model + '_'
-                + args.dataset  + '_' + args.testset)
+        return (test_loss/batch_idx, acc)
 
 
     if not os.path.exists(logname):
         with open(logname, 'w') as logfile:
             logwriter = csv.writer(logfile, delimiter=',')
-            logwriter.writerow(['epoch', 'test loss', 'test acc', 'test err'])
+            #logwriter.writerow(['epoch', 'test loss', 'test acc', 'test err'])
+            logwriter.writerow(['test loss', 'test acc', 'test err'])
 
-    for epoch in range(start_epoch, args.epoch):
-        test_loss, test_acc, best_acc = test(epoch, best_acc)
-        with open(logname, 'a') as logfile:
-            logwriter = csv.writer(logfile, delimiter=',')
-            logwriter.writerow([epoch, test_loss,
-                                test_acc, (100-test_acc)])
+
+    test_loss, test_acc = test()
+    with open(logname, 'a') as logfile:
+        logwriter = csv.writer(logfile, delimiter=',')
+        logwriter.writerow([test_loss,test_acc, (100-test_acc)])
     
-    toc = time.perf_counter()
-
 if __name__ == '__main__':
     tic = time.perf_counter()
     main()
     toc = time.perf_counter()
-    print(f"Run for: {(((toc - tic)/60)/60):0.4f} hours.")
+    print(f"Run for: {(((toc - tic)/60)):0.4f} minutes.")

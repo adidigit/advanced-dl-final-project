@@ -133,6 +133,7 @@ environment.yml
 
 # results & checkpoints
 mixup-cifar10/results/
+mixup-cifar10/test_results/
 mixup-cifar10/checkpoint/
 
 # vscode folder

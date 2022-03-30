@@ -347,22 +347,23 @@ def main():
 
     for epoch in range(start_epoch, args.epoch):
         train_loss, reg_loss, train_acc = train(epoch)
-        tic = time.perf_counter()
+        #tic = time.perf_counter()
         test_loss, test_acc, best_acc = test(epoch, best_acc)
-        toc = time.perf_counter()
-        tot_val_time += (toc - tic)
+        #toc = time.perf_counter()
+        #tot_val_time += (toc - tic)
         adjust_learning_rate(optimizer, epoch)
         with open(logname, 'a') as logfile:
             logwriter = csv.writer(logfile, delimiter=',')
             logwriter.writerow([epoch, train_loss, reg_loss, train_acc, test_loss,
                                 test_acc, (100-test_acc)])
 
-    return tot_val_time
+    #return tot_val_time
     
 
 if __name__ == '__main__':
     tic = time.perf_counter()
-    tot_val_time = main()
+    #tot_val_time = main()
+    main()
     toc = time.perf_counter()
-    print(f"Validation run for: {(((tot_val_time)/60)):0.4f} minutes.")
+    #print(f"Validation run for: {(((tot_val_time)/60)):0.4f} minutes.")
     print(f"Run for: {(((toc - tic)/60)/60):0.4f} hours.")
