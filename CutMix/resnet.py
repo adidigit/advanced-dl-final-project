@@ -146,7 +146,7 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        if self.dataset == 'cifar10' or self.dataset == 'cifar100':
+        if self.dataset == 'cifar10' or self.dataset == 'cifar100' or self.dataset == 'cifar10c' or self.dataset == 'cifar100c':
             x = self.conv1(x)
             x = self.bn1(x)
             x = self.relu(x)

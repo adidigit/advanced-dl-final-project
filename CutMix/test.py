@@ -46,14 +46,15 @@ parser.add_argument('--depth', default=101, type=int, #32
                     help='depth of the network (default: 32)')
 parser.add_argument('--no-bottleneck', dest='bottleneck', action='store_false',
                     help='to use basicblock for CIFAR datasets (default: bottleneck)')
-parser.add_argument('--dataset', dest='dataset', default='cifar100', type=str, #imagenet
+parser.add_argument('--dataset', dest='dataset', default='cifar100c', type=str, #imagenet
                     help='dataset (options: cifar10, cifar100, cifar10c, cifar100c and imagenet)')
 parser.add_argument('--alpha', default=300, type=float,
                     help='number of new channel increases per depth (default: 300)')
 parser.add_argument('--no-verbose', dest='verbose', action='store_false',
                     help='to print the status at every iteration')
 #parser.add_argument('--pretrained', default='/set/your/model/path', type=str, metavar='PATH')
-parser.add_argument('--pretrained', default='resnet101CutMix/model_best.pth.tar', type=str, metavar='PATH')
+#parser.add_argument('--pretrained', default='resnet101CutMix/model_best.pth.tar', type=str, metavar='PATH')
+parser.add_argument('--pretrained', default='resnet101CutMix/checkpoint.pth.tar', type=str, metavar='PATH')
 #parser.add_argument('--pretrained', default='CutMix/checkpoint.pth.tar', type=str, metavar='PATH')
 
 
@@ -119,8 +120,7 @@ def main():
             valset =  ConcatDataset(testset_arr)
 
             val_loader = torch.utils.data.DataLoader(
-                valset,
-                batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
+                valset, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True, drop_last=True)
             numberofclass = 100
 
 
@@ -128,7 +128,7 @@ def main():
             corruptions = load_txt('./corruptions.txt')
 
             for i, cname in enumerate(corruptions):
-                tmp_dataset = CIFAR100C(root=os.path.join(my_data_root, 'CIFAR-10-C'),name=cname,
+                tmp_dataset = CIFAR10C(root=os.path.join(my_data_root, 'CIFAR-10-C'),name=cname,
                                             transform=transform_test)
 
                 start= 20000
@@ -144,8 +144,7 @@ def main():
 
             valset =  ConcatDataset(testset_arr)
             val_loader = torch.utils.data.DataLoader(
-                valset,
-                batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
+                valset, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
             numberofclass = 10
         else:
             raise Exception('unknown dataset: {}'.format(args.dataset))
@@ -217,6 +216,7 @@ def validate(val_loader, model, criterion):
         target = target.cuda()
 
         output = model(input)
+        #output_max = torch.argmax(output, dim=0)
         loss = criterion(output, target)
 
         # measure accuracy and record loss
