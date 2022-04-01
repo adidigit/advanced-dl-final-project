@@ -250,6 +250,48 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
         if args.my_test == 1 and args.beta > 0:
             lam = np.random.beta(args.beta, args.beta)
+            rand_col_row = np.random.choice(2,replace=False)  # choose cols or rows
+            if (torch.cuda.is_available()):
+                rand_index = torch.randperm(input.size()[0]).cuda()
+            else:
+                rand_index = torch.randperm(input.size()[0])
+            target_a = target
+            target_b = target[rand_index]
+
+            if rand_col_row == 0:
+                ratio = int(lam * input.shape[-2])
+                rand_pixels = np.random.choice(list(range(input.shape[-2])), ratio, replace=False)
+                input[:, :, rand_pixels, :] = (input[rand_index, :, :, :])[:, :, rand_pixels, :]
+                lam = 1 - len(rand_pixels) * input.shape[-1] / (input.size()[-1] * input.size()[-2])
+            else:
+                ratio = int(lam * input.shape[-1])
+                rand_pixels = np.random.choice(list(range(input.shape[-1])), ratio)
+                input[:, :, :, rand_pixels] = (input[rand_index, :, :, :])[:, :, :, rand_pixels]
+                lam = 1 - len(rand_pixels) * input.shape[-2] / (input.size()[-1] * input.size()[-2])
+
+        if args.my_test == 2 and args.beta > 0:
+            lam = np.random.beta(args.beta, args.beta)
+            input_original_shape = input.shape
+            input = input.view(input.shape[0], input.shape[1], input.shape[2] * input.shape[3])
+
+            if (torch.cuda.is_available()):
+                rand_index = torch.randperm(input.size()[0]).cuda()
+            else:
+                rand_index = torch.randperm(input.size()[0])
+            target_a = target
+            target_b = target[rand_index]
+
+            ratio = int(lam * input.shape[2])
+            rand_pixels = np.random.choice(list(range(input.shape[2])), input.shape[2], replace=False)
+            input[:, :, rand_pixels] = (input[rand_index, :, :])[:, :, rand_pixels1]
+            lam = 1 - len(rand_pixels) / (input.size()[2])
+            input = input.view(input_original_shape)
+            output = model(input)
+            loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
+
+
+        if args.my_test == 3 and args.beta > 0:
+            lam = np.random.beta(args.beta, args.beta)
             input_original_shape = input.shape
             input = input.view(input.shape[0], input.shape[1], input.shape[2] * input.shape[3])
 
@@ -271,6 +313,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
             input = input.view(input_original_shape)
             output = model(input)
             loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
+
 
         else:
             # compute output
