@@ -23,6 +23,13 @@ import numpy as np
 
 import warnings
 
+from ray import tune
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+from functools import partial
+
+from torch.utils.data import random_split
+
 warnings.filterwarnings("ignore")
 
 model_names = sorted(name for name in models.__dict__
@@ -73,11 +80,7 @@ parser.set_defaults(verbose=True)
 best_err1 = 100
 best_err5 = 100
 
-
-def main():
-    global args, best_err1, best_err5
-    args = parser.parse_args()
-
+def load_data():
     if args.dataset.startswith('cifar'):
         normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
                                          std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
@@ -95,20 +98,12 @@ def main():
         ])
 
         if args.dataset == 'cifar100':
-            train_loader = torch.utils.data.DataLoader(
-                datasets.CIFAR100('../data', train=True, download=True, transform=transform_train),
-                batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
-            val_loader = torch.utils.data.DataLoader(
-                datasets.CIFAR100('../data', train=False, transform=transform_test),
-                batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
+            train_dataset = datasets.CIFAR100('../data', train=True, download=True, transform=transform_train)
+            val_dataset = datasets.CIFAR100('../data', train=False, transform=transform_test)
             numberofclass = 100
         elif args.dataset == 'cifar10':
-            train_loader = torch.utils.data.DataLoader(
-                datasets.CIFAR10('../data', train=True, download=True, transform=transform_train),
-                batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
-            val_loader = torch.utils.data.DataLoader(
-                datasets.CIFAR10('../data', train=False, transform=transform_test),
-                batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
+            train_dataset = datasets.CIFAR10('../data', train=True, download=True, transform=transform_train)
+            val_dataset = datasets.CIFAR10('../data', train=False, transform=transform_test)
             numberofclass = 10
         else:
             raise Exception('unknown dataset: {}'.format(args.dataset))
@@ -138,25 +133,39 @@ def main():
                 normalize,
             ]))
 
-        train_sampler = None
-
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-            num_workers=args.workers, pin_memory=True, sampler=train_sampler)
-
-        val_loader = torch.utils.data.DataLoader(
-            datasets.ImageFolder(valdir, transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                normalize,
-            ])),
-            batch_size=args.batch_size, shuffle=False,
-            num_workers=args.workers, pin_memory=True)
         numberofclass = 1000
 
     else:
         raise Exception('unknown dataset: {}'.format(args.dataset))
+
+
+    return train_dataset, val_dataset , numberofclass
+
+def train_cifar(config ,checkpoint_dir=None):
+    train_subset, val_subset , numberofclass = load_data()
+
+    if args.dataset == 'cifar100':
+        train_loader = torch.utils.data.DataLoader(train_subset,
+                                               batch_size=int(config["batch_size"]), shuffle=True, num_workers=args.workers,
+                                               pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(val_subset,
+                                                 batch_size=int(config["batch_size"]), shuffle=True, num_workers=args.workers,
+                                                 pin_memory=True)
+
+    if args.dataset == 'imagenet':
+        valdir = os.path.join('/home/data/ILSVRC/val')
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
+
+        train_sampler = None
+        train_loader = torch.utils.data.DataLoader(
+            train_subset, batch_size=int(config["batch_size"]), shuffle=(train_sampler is None),
+            num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+
+        val_loader = torch.utils.data.DataLoader(
+            val_subset,
+            batch_size=int(config["batch_size"]), shuffle=False,
+            num_workers=args.workers, pin_memory=True)
 
     print("=> creating model '{}'".format(args.net_type))
     if args.net_type == 'resnet':
@@ -176,7 +185,7 @@ def main():
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss()#.cuda()
 
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    optimizer = torch.optim.SGD(model.parameters(), lr=config["lr"],
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay, nesterov=True)
 
@@ -187,7 +196,7 @@ def main():
         adjust_learning_rate(optimizer, epoch)
 
         # train for one epoch
-        train_loss = train(train_loader, model, criterion, optimizer, epoch)
+        train_loss = train(train_loader,model, criterion, optimizer, epoch, config)
 
         # evaluate on validation set
         err1, err5, val_loss = validate(val_loader, model, criterion, epoch)
@@ -208,10 +217,53 @@ def main():
             'optimizer': optimizer.state_dict(),
         }, is_best)
 
+        tune.report(loss=(val_loss), accuracy=err1)
+
     print('Best accuracy (top-1 and 5 error):', best_err1, best_err5)
 
+def main():
+    global args, best_err1, best_err5
+    args = parser.parse_args()
+    load_data()
 
-def train(train_loader, model, criterion, optimizer, epoch):
+    config = {
+        "lr": tune.loguniform(1e-4, 1e-1),
+        "batch_size": tune.choice([32, 64, 128]),
+        "my_test": tune.choice([1,2,3])
+    }
+    scheduler = ASHAScheduler(
+        metric="loss",
+        mode="min",
+        max_t=args.epochs,
+        grace_period=1,
+        reduction_factor=2)
+
+    reporter = CLIReporter(
+        # parameter_columns=["l1", "l2", "lr", "batch_size"],
+        metric_columns=["loss", "accuracy", "training_iteration"])
+
+    data_dir = os.path.abspath("./data")
+    gpus_per_trial = 1
+    num_samples = 10
+    result = tune.run(
+        partial(train_cifar),
+        resources_per_trial={"cpu": 2, "gpu": gpus_per_trial},
+        config=config,
+        num_samples=num_samples,
+        scheduler=scheduler,
+        progress_reporter=reporter)
+
+    best_trial = result.get_best_trial("loss", "min", "last")
+    print("Best trial config: {}".format(best_trial.config))
+    print("Best trial final validation loss: {}".format(
+        best_trial.last_result["loss"]))
+    print("Best trial final validation accuracy: {}".format(
+        best_trial.last_result["accuracy"]))
+
+
+
+
+def train(train_loader,model, criterion, optimizer, epoch, config):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -228,7 +280,6 @@ def train(train_loader, model, criterion, optimizer, epoch):
         data_time.update(time.time() - end)
         if torch.cuda.is_available():
             input = input.cuda()
-            target = target.cuda()
 
         r = np.random.rand(1)
         if args.beta > 0 and r < args.cutmix_prob:
@@ -248,7 +299,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
             output = model(input)
             loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
 
-        if args.my_test == 1 and args.beta > 0:
+        if config["my_test"] == 1 and args.beta > 0:
             lam = np.random.beta(args.beta, args.beta)
             rand_col_row = np.random.choice(2,replace=False)  # choose cols or rows
             if (torch.cuda.is_available()):
@@ -269,7 +320,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
                 input[:, :, :, rand_pixels] = (input[rand_index, :, :, :])[:, :, :, rand_pixels]
                 lam = 1 - len(rand_pixels) * input.shape[-2] / (input.size()[-1] * input.size()[-2])
 
-        if args.my_test == 2 and args.beta > 0:
+        if config["my_test"] == 2 and args.beta > 0:
             lam = np.random.beta(args.beta, args.beta)
             input_original_shape = input.shape
             input = input.view(input.shape[0], input.shape[1], input.shape[2] * input.shape[3])
@@ -290,7 +341,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
             loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
 
 
-        if args.my_test == 3 and args.beta > 0:
+        if config["my_test"] == 3 and args.beta > 0:
             lam = np.random.beta(args.beta, args.beta)
             input_original_shape = input.shape
             input = input.view(input.shape[0], input.shape[1], input.shape[2] * input.shape[3])
