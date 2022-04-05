@@ -174,7 +174,7 @@ def main():
     print('the number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
     # define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss()#.cuda()
+    criterion = nn.CrossEntropyLoss().cuda()
 
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
@@ -281,9 +281,9 @@ def train(train_loader, model, criterion, optimizer, epoch):
             target_a = target
             target_b = target[rand_index]
 
-            ratio = int(lam * input.shape[2])
-            rand_pixels = np.random.choice(list(range(input.shape[2])), input.shape[2], replace=False)
-            input[:, :, rand_pixels] = (input[rand_index, :, :])[:, :, rand_pixels1]
+            ratio = int((1-lam) * input.shape[2])
+            rand_pixels = np.random.choice(list(range(input.shape[2])), ratio, replace=False)
+            input[:, :, rand_pixels] = (input[rand_index, :, :])[:, :, rand_pixels]
             lam = 1 - len(rand_pixels) / (input.size()[2])
             input = input.view(input_original_shape)
             output = model(input)
@@ -307,8 +307,8 @@ def train(train_loader, model, criterion, optimizer, epoch):
             rand_pixels1 = rand_pixels[:ratio]
             rand_pixels2 = rand_pixels[ratio:]
 
-            input[:, :, rand_pixels1] = (input[rand_index, :, :])[:, :, rand_pixels1]
-            input[:, :, rand_pixels2] = (input[:, :, :])[:, :, rand_pixels2]
+            #input[:, :, rand_pixels1] = (input[:, :, :])[:, :, rand_pixels1]
+            input[:, :, rand_pixels2] = (input[rand_index, :, :])[:, :, rand_pixels2]
             lam = 1 - len(rand_pixels2) / (input.size()[2])
             input = input.view(input_original_shape)
             output = model(input)
@@ -402,17 +402,17 @@ def validate(val_loader, model, criterion, epoch):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0 and args.verbose == True:
-            print('Test (on val set): [{0}/{1}][{2}/{3}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Top 1-err {top1.val:.4f} ({top1.avg:.4f})\t'
-                  'Top 5-err {top5.val:.4f} ({top5.avg:.4f})'.format(
-                epoch, args.epochs, i, len(val_loader), batch_time=batch_time, loss=losses,
-                top1=top1, top5=top5))
-
-    print('* Epoch: [{0}/{1}]\t Top 1-err {top1.avg:.3f}  Top 5-err {top5.avg:.3f}\t Test Loss {loss.avg:.3f}'.format(
-        epoch, args.epochs, top1=top1, top5=top5, loss=losses))
+    #     if i % args.print_freq == 0 and args.verbose == True:
+    #         print('Test (on val set): [{0}/{1}][{2}/{3}]\t'
+    #               'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+    #               'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+    #               'Top 1-err {top1.val:.4f} ({top1.avg:.4f})\t'
+    #               'Top 5-err {top5.val:.4f} ({top5.avg:.4f})'.format(
+    #             epoch, args.epochs, i, len(val_loader), batch_time=batch_time, loss=losses,
+    #             top1=top1, top5=top5))§
+    #
+    # print('* Epoch: [{0}/{1}]\t Top 1-err {top1.avg:.3f}  Top 5-err {top5.avg:.3f}\t Test Loss {loss.avg:.3f}'.format(
+    #     epoch, args.epochs, top1=top1, top5=top5, loss=losses))
     return top1.avg, top5.avg, losses.avg
 
 
