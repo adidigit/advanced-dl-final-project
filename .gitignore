@@ -135,6 +135,9 @@ environment.yml
 mixup-cifar10/results/
 mixup-cifar10/test_results/
 mixup-cifar10/checkpoint/
+CutMix/CutMix/
+CutMix/resnet101CutMix/
+
 
 # vscode folder
 .idea/
