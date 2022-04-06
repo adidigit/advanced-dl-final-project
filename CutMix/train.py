@@ -302,10 +302,10 @@ def train(train_loader, model, criterion, optimizer, epoch):
             target_a = target
             target_b = target[rand_index]
 
-            ratio = int(lam * input.shape[2])
+            ratio = int((1-lam) * input.shape[2])
             rand_pixels = np.random.choice(list(range(input.shape[2])), input.shape[2], replace=False)
-            rand_pixels1 = rand_pixels[:ratio]
-            rand_pixels2 = rand_pixels[ratio:]
+            #rand_pixels1 = rand_pixels[:ratio]
+            rand_pixels2 = rand_pixels[:ratio]
 
             #input[:, :, rand_pixels1] = (input[:, :, :])[:, :, rand_pixels1]
             input[:, :, rand_pixels2] = (input[rand_index, :, :])[:, :, rand_pixels2]
