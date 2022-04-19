@@ -30,6 +30,7 @@ python train.py \
 ```
 python test.py \
 --batch_size 64 \
+--pretrained ${MODEL_PATH} \
 --dataset cifar100C 
 ```
 or use our notebook [test_models.ipynb](https://github.com/adidigit/advanced-dl-final-project/blob/main/test_models.ipynb)
