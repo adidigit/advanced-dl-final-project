@@ -52,11 +52,7 @@ parser.add_argument('--alpha', default=300, type=float,
                     help='number of new channel increases per depth (default: 300)')
 parser.add_argument('--no-verbose', dest='verbose', action='store_false',
                     help='to print the status at every iteration')
-#parser.add_argument('--pretrained', default='/set/your/model/path', type=str, metavar='PATH')
-#parser.add_argument('--pretrained', default='resnet101CutMix/model_best.pth.tar', type=str, metavar='PATH')
-parser.add_argument('--pretrained', default='resnet101CutMix/checkpoint.pth.tar', type=str, metavar='PATH')
-#parser.add_argument('--pretrained', default='CutMix/checkpoint.pth.tar', type=str, metavar='PATH')
-
+parser.add_argument('--pretrained', default='/set/your/model/path', type=str, metavar='PATH')
 
 
 parser.set_defaults(bottleneck=True)
@@ -67,8 +63,8 @@ best_err5 = 100
 
 
 def main():
-    #my_data_root = '../data'
-    my_data_root = 'C:/Users/naama-alon/data'
+    my_data_root = '../data'
+    #my_data_root = 'C:/Users/naama-alon/data'
 
     global args, best_err1, best_err5
     args = parser.parse_args()
