@@ -12,6 +12,8 @@ In my_test parameter choose the test you wish to run: 1, 2 or 3.
 -	Test 3: choose random pixels (different randomization method from Test 2) and change them to pixels from another image (CutMix). 
 
 ```
+cd CutMix
+
 python train.py \
 --net_type resnet \
 --dataset cifar100 \
@@ -28,6 +30,8 @@ python train.py \
 ### Test model on CIFAR100 corrupted:
 
 ```
+cd CutMix
+
 python test.py \
 --net_type resnet \
 --dataset cifar100C \
