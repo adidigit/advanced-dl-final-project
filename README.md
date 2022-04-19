@@ -29,9 +29,11 @@ python train.py \
 
 ```
 python test.py \
+--net_type resnet \
+--dataset cifar100C \
+--depth 18 \
 --batch_size 64 \
---pretrained ${MODEL_PATH} \
---dataset cifar100C 
+--pretrained ${MODEL_PATH} 
 ```
 or use our notebook [test_models.ipynb](https://github.com/adidigit/advanced-dl-final-project/blob/main/test_models.ipynb)
 
