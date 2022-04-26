@@ -12,7 +12,9 @@ In my_test parameter choose the test you wish to run: 1, 2 or 3.
 -	Test 3: choose random pixels (different randomization method from Test 2) and change them to pixels from another image (CutMix). 
 
 ```
-python train.py \
+>> cd CutMix
+
+>> python train.py \
 --net_type resnet \
 --dataset cifar100 \
 --depth 18 \
@@ -28,10 +30,15 @@ python train.py \
 ### Test model on CIFAR100 corrupted:
 
 ```
-python test.py \
+>> cd CutMix
+
+>> python test.py \
+--net_type resnet \
+--dataset cifar100C \
+--depth 18 \
 --batch_size 64 \
---dataset cifar100C 
+--pretrained ${MODEL_PATH} 
 ```
-or use our notebook test_models.ipynb
+or use our notebook [test_models.ipynb](https://github.com/adidigit/advanced-dl-final-project/blob/main/test_models.ipynb)
 
 
