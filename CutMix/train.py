@@ -37,7 +37,7 @@ parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=300, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('-b', '--batch_size', default=64, type=int,
+parser.add_argument('-b', '--batch_size--batch_size', default=64, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--lr', '--learning-rate', default=0.25, type=float,
                     metavar='LR', help='initial learning rate')
@@ -102,6 +102,7 @@ def main():
                 datasets.CIFAR100('../data', train=False, transform=transform_test),
                 batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
             numberofclass = 100
+            image_size= 32
         elif args.dataset == 'cifar10':
             train_loader = torch.utils.data.DataLoader(
                 datasets.CIFAR10('../data', train=True, download=True, transform=transform_train),
@@ -110,6 +111,7 @@ def main():
                 datasets.CIFAR10('../data', train=False, transform=transform_test),
                 batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
             numberofclass = 10
+            image_size = 32
         else:
             raise Exception('unknown dataset: {}'.format(args.dataset))
 
@@ -137,6 +139,7 @@ def main():
                 lighting,
                 normalize,
             ]))
+        image_size = 224
 
         train_sampler = None
 
@@ -164,6 +167,8 @@ def main():
     elif args.net_type == 'pyramidnet':
         model = PYRM.PyramidNet(args.dataset, args.depth, args.alpha, numberofclass,
                                 args.bottleneck)
+    elif args.net_type == 'vit':
+        model = models.vit_b_16(image_size=image_size)
     else:
         raise Exception('unknown network architecture: {}'.format(args.net_type))
 
@@ -313,8 +318,29 @@ def train(train_loader, model, criterion, optimizer, epoch):
             input = input.view(input_original_shape)
             output = model(input)
             loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
-
-
+        if args.my_test == 4:
+            lam = np.random.beta(args.beta, args.beta)
+            if (torch.cuda.is_available()):
+                rand_index = torch.randperm(input.size()[0]).cuda()
+            else:
+                rand_index = torch.randperm(input.size()[0])
+            target_a = target
+            target_b = target[rand_index]
+            num_of_patches = input.shape[2] * input.shape[3] // (model.patch_size ** 2)
+            ratio = int(num_of_patches * (1 - lam))
+            rand_patches = np.random.choice(num_of_patches, ratio)
+            unfold = torch.nn.Unfold(kernel_size=(model.patch_size, model.patch_size),
+                                     stride=(model.patch_size, model.patch_size))
+            patches_vec = unfold(input)
+            patches_vec[:, :, rand_patches] = (patches_vec[rand_index, :, :])[:, :, rand_patches]
+            fold = torch.nn.Fold(output_size=(input.shape[2], input.shape[2]),
+                                 kernel_size=(model.patch_size, model.patch_size),
+                                 stride=(model.patch_size, model.patch_size))
+            input = fold(patches_vec)
+            lam = 1 - (len(rand_patches) / num_of_patches)
+            # compute output
+            output = model(input)
+            loss = criterion(output, target_a) * lam + criterion(output, target_b) * (1. - lam)
         else:
             # compute output
             output = model(input)
